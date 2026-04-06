@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindBridge — Emotional Support AI</title>
+  <meta name="description" content="AI-powered mental health and emotional support chatbot with real-time reasoning transparency." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+  <!-- ─── Top Bar ─────────────────────────────────────────────────── -->
+  <header id="app-header">
+    <div class="header-left">
+      <span class="logo-icon">🧠</span>
+      <h1>MindBridge</h1>
+      <span class="header-tag">Emotional Support AI</span>
+    </div>
+    <div class="header-right">
+      <button id="btn-new-chat" title="New conversation" aria-label="New conversation">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Chat
+      </button>
+      <button id="btn-toggle-debug" title="Toggle Judge View" aria-label="Toggle Judge View">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Judge View
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── Loading Overlay ─────────────────────────────────────── -->
+  <div id="loading-overlay">
+    <div class="loading-card">
+      <div class="loading-spinner"></div>
+      <h2>Loading Models</h2>
+      <p id="loading-status">Initializing…</p>
+    </div>
+  </div>
+
+  <!-- ─── Main layout ────────────────────────────────────────────── -->
+  <main id="app-main">
+
+    <!-- Chat Panel -->
+    <section id="chat-panel">
+      <div id="chat-messages">
+        <!-- Welcome card -->
+        <div class="welcome-card" id="welcome-card">
+          <div class="welcome-icon">✨</div>
+          <h2>Welcome to MindBridge</h2>
+          <p>I'm here to listen and support you. Share what's on your mind — everything stays between us.</p>
+          <div class="welcome-hints">
+            <button class="hint-chip" data-hint="I've been feeling really overwhelmed lately">💭 Feeling overwhelmed</button>
+            <button class="hint-chip" data-hint="I can't sleep because my mind won't stop racing">😟 Racing thoughts</button>
+            <button class="hint-chip" data-hint="I feel like nobody really understands me">🫂 Feeling alone</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Bar -->
+      <div id="chat-input-wrapper">
+        <div id="safety-banner" class="hidden">
+          <span class="safety-icon">⚠️</span>
+          <span class="safety-text"></span>
+        </div>
+        <form id="chat-form" autocomplete="off">
+          <div class="input-row">
+            <textarea id="chat-input"
+                      placeholder="Type your message…"
+                      rows="1"
+                      aria-label="Message input"
+                      maxlength="4000"></textarea>
+            <button type="submit" id="btn-send" disabled aria-label="Send message">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+          <p class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Debug Panel (Judge View) -->
+    <aside id="debug-panel" class="hidden">
+      <div class="debug-header">
+        <h2>🔍 Judge View</h2>
+        <span class="debug-badge">Live</span>
+      </div>
+
+      <div class="debug-scroll">
+
+        <!-- Emotion State -->
+        <div class="debug-card" id="debug-emotion">
+          <h3>Emotion Detection</h3>
+          <div class="emotion-display">
+            <span class="emotion-label" id="emotion-label">neutral</span>
+            <div class="emotion-bar-track">
+              <div class="emotion-bar-fill" id="emotion-bar" style="width: 0%"></div>
+            </div>
+            <span class="emotion-confidence" id="emotion-confidence">0%</span>
+          </div>
+          <div class="emotion-keywords" id="emotion-keywords"></div>
+        </div>
+
+        <!-- Safety Status -->
+        <div class="debug-card" id="debug-safety">
+          <h3>Safety Monitor</h3>
+          <div class="safety-status" id="safety-status">
+            <span class="safety-dot safe"></span>
+            <span>No flags</span>
+          </div>
+          <div class="safety-details hidden" id="safety-details"></div>
+        </div>
+
+        <!-- Entity Tracker -->
+        <div class="debug-card" id="debug-entities">
+          <h3>Entity Tracker</h3>
+          <div class="entity-list" id="entity-list">
+            <p class="empty-state">No entities detected yet</p>
+          </div>
+        </div>
+
+        <!-- RAG Sources -->
+        <div class="debug-card" id="debug-rag">
+          <h3>RAG Sources</h3>
+          <div class="rag-list" id="rag-list">
+            <p class="empty-state">No retrieval performed yet</p>
+          </div>
+        </div>
+
+        <!-- Reasoning Stream -->
+        <div class="debug-card debug-card-tall" id="debug-thinking">
+          <div class="debug-card-header">
+            <h3>🧠 LLM Reasoning</h3>
+            <label class="toggle-switch" title="Toggle reasoning visibility">
+              <input type="checkbox" id="toggle-reasoning" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <pre class="thinking-stream" id="thinking-stream">Waiting for inference…</pre>
+          <p class="reasoning-off-hint" id="reasoning-off-hint">Reasoning stream is off. Toggle to view.</p>
+        </div>
+
+        <!-- Session Info -->
+        <div class="debug-card" id="debug-session">
+          <h3>Session</h3>
+          <table class="session-table">
+            <tr><td>ID</td><td id="session-id-display">—</td></tr>
+            <tr><td>Turns</td><td id="turn-count">0</td></tr>
+            <tr><td>Preferences</td><td id="preferences-display">—</td></tr>
+          </table>
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
