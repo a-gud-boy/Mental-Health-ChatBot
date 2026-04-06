@@ -159,6 +159,19 @@ def chat(req: ChatRequest):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.get("/api/sessions")
+def list_sessions():
+    """List all chat sessions (for the sidebar)."""
+    return memory.list_sessions()
+
+
+@app.delete("/api/sessions/{session_id}")
+def delete_session(session_id: str):
+    """Delete a session permanently."""
+    memory.delete(session_id)
+    return {"status": "ok"}
+
+
 @app.get("/api/sessions/{session_id}")
 def get_session(session_id: str):
     """Return full session state (for the debug panel on page reload)."""

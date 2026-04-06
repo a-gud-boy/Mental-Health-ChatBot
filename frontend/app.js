@@ -14,7 +14,10 @@
   const $btnSend       = document.getElementById("btn-send");
   const $btnNewChat    = document.getElementById("btn-new-chat");
   const $btnDebug      = document.getElementById("btn-toggle-debug");
+  const $btnSidebar    = document.getElementById("btn-toggle-sidebar");
   const $debugPanel    = document.getElementById("debug-panel");
+  const $historyPanel  = document.getElementById("history-panel");
+  const $historyList   = document.getElementById("history-list");
   const $safetyBanner  = document.getElementById("safety-banner");
 
   // Debug sub-elements
@@ -37,6 +40,7 @@
   let sessionId = localStorage.getItem("mb_session_id") || null;
   let isStreaming = false;
   let reasoningVisible = localStorage.getItem("mb_reasoning_on") === "true"; // default OFF
+  let sidebarVisible = localStorage.getItem("mb_sidebar_on") === "true"; // default off
 
   // ─── Debug panel toggle ────────────────────────────────────────────────────
   $btnDebug.addEventListener("click", () => {
@@ -66,20 +70,28 @@
 
   applyReasoningVisibility();
 
+  // ─── Sidebar toggle (persisted) ────────────────────────────────────────────
+  function applySidebarVisibility() {
+    $historyPanel.classList.toggle("hidden", !sidebarVisible);
+    $btnSidebar.classList.toggle("active", sidebarVisible);
+  }
+
+  $btnSidebar.addEventListener("click", () => {
+    sidebarVisible = !sidebarVisible;
+    localStorage.setItem("mb_sidebar_on", sidebarVisible ? "true" : "false");
+    applySidebarVisibility();
+    if (sidebarVisible) refreshHistory();
+  });
+
+  applySidebarVisibility();
+
   // ─── New Chat ──────────────────────────────────────────────────────────────
   $btnNewChat.addEventListener("click", async () => {
     if (isStreaming) return;
-    if (sessionId) {
-      try { await fetch("/api/reset", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId }),
-        });
-      } catch (_) { /* ignore */ }
-    }
     sessionId = null;
     localStorage.removeItem("mb_session_id");
     clearChat();
+    refreshHistory();
   });
 
   // ─── Hint chips ────────────────────────────────────────────────────────────
@@ -140,6 +152,43 @@
     const assistantBubble = appendMessage("assistant", null, true);
     const bodyEl = assistantBubble.querySelector(".msg-body");
 
+    let inlineThinkEl = null;
+    let inlineThinkContent = null;
+    let thinkingText = "";
+    let removedTyping = false;
+    let thinkingFinalized = false;
+
+    function ensureInlineThink() {
+      if (inlineThinkEl || !reasoningVisible) return;
+      // Remove typing indicator to make room
+      if (!removedTyping) {
+        bodyEl.innerHTML = "";
+        removedTyping = true;
+      }
+      const details = document.createElement("details");
+      details.className = "msg-thinking is-streaming";
+      details.open = true;
+      details.innerHTML = `
+        <summary>
+          <span class="think-spinner"></span>
+          Thinking…
+        </summary>
+        <div class="msg-thinking-content"></div>
+      `;
+      bodyEl.appendChild(details);
+      inlineThinkEl = details;
+      inlineThinkContent = details.querySelector(".msg-thinking-content");
+    }
+
+    function finalizeInlineThink() {
+      if (!inlineThinkEl) return;
+      inlineThinkEl.classList.remove("is-streaming");
+      const summary = inlineThinkEl.querySelector("summary");
+      const tokenCount = thinkingText.split(/\s+/).filter(Boolean).length;
+      summary.innerHTML = `Thought for ${tokenCount} tokens <span class="msg-thinking-badge">${tokenCount} tokens</span>`;
+      inlineThinkEl.open = false; // collapse after thinking is done
+    }
+
     // Start SSE
     try {
       const resp = await fetch("/api/chat", {
@@ -161,7 +210,6 @@
       const decoder = new TextDecoder();
       let buffer = "";
       let contentSoFar = "";
-      let removedTyping = false;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -204,18 +252,41 @@
           }
 
           case "thinking": {
+            // Debug panel
             $thinkStream.textContent += data;
             $thinkStream.scrollTop = $thinkStream.scrollHeight;
+            // Inline bubble
+            thinkingText += data;
+            ensureInlineThink();
+            if (inlineThinkContent) {
+              inlineThinkContent.textContent = thinkingText;
+              inlineThinkContent.scrollTop = inlineThinkContent.scrollHeight;
+            }
+            scrollToBottom();
             break;
           }
 
           case "content": {
+            // Finalize thinking block on first content token
+            if (inlineThinkEl && !thinkingFinalized) {
+              finalizeInlineThink();
+              thinkingFinalized = true;
+            }
             if (!removedTyping) {
-              bodyEl.innerHTML = "";
+              if (!inlineThinkEl) {
+                bodyEl.innerHTML = "";
+              }
               removedTyping = true;
             }
             contentSoFar += data;
-            bodyEl.innerHTML = renderMarkdown(contentSoFar);
+            // Rebuild: keep thinking block + render content after it
+            const thinkHTML = inlineThinkEl ? inlineThinkEl.outerHTML : "";
+            bodyEl.innerHTML = thinkHTML + renderMarkdown(contentSoFar);
+            // Re-attach the live reference
+            if (inlineThinkEl) {
+              inlineThinkEl = bodyEl.querySelector(".msg-thinking");
+              inlineThinkContent = inlineThinkEl?.querySelector(".msg-thinking-content");
+            }
             bodyEl.classList.add("streaming-cursor");
             scrollToBottom();
             break;
@@ -244,6 +315,132 @@
     isStreaming = false;
     updateSendButton();
     scrollToBottom();
+    refreshHistory();
+  }
+
+  // ─── History Sidebar ────────────────────────────────────────────────────────
+  async function refreshHistory() {
+    try {
+      const resp = await fetch("/api/sessions");
+      if (!resp.ok) return;
+      const sessions = await resp.json();
+
+      if (sessions.length === 0) {
+        $historyList.innerHTML = `<p class="empty-state">No conversations yet</p>`;
+        return;
+      }
+
+      $historyList.innerHTML = sessions.map(s => {
+        const isActive = s.session_id === sessionId;
+        const timeAgo = formatTimeAgo(s.last_active);
+        return `
+          <div class="history-item${isActive ? ' active' : ''}" data-sid="${esc(s.session_id)}">
+            <div class="history-item-content">
+              <div class="history-item-title">${esc(s.title)}</div>
+              <div class="history-item-meta">
+                <span>${s.turn_count} turn${s.turn_count !== 1 ? 's' : ''}</span>
+                <span>·</span>
+                <span>${timeAgo}</span>
+                ${s.emotion !== 'neutral' ? `<span class="history-item-emotion">${esc(s.emotion)}</span>` : ''}
+              </div>
+            </div>
+            <button class="history-item-delete" data-delete="${esc(s.session_id)}" title="Delete conversation">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+            </button>
+          </div>
+        `;
+      }).join("");
+
+      // Click to load session
+      $historyList.querySelectorAll(".history-item").forEach(item => {
+        item.addEventListener("click", (e) => {
+          if (e.target.closest(".history-item-delete")) return;
+          const sid = item.dataset.sid;
+          if (sid && sid !== sessionId && !isStreaming) {
+            loadSession(sid);
+          }
+        });
+      });
+
+      // Delete buttons
+      $historyList.querySelectorAll(".history-item-delete").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const sid = btn.dataset.delete;
+          if (!sid) return;
+          await deleteSession(sid);
+        });
+      });
+
+    } catch (_) { /* ignore */ }
+  }
+
+  async function loadSession(sid) {
+    try {
+      const resp = await fetch(`/api/sessions/${sid}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      sessionId = sid;
+      localStorage.setItem("mb_session_id", sid);
+      $sessionId.textContent = sid.slice(0, 12) + "…";
+
+      // Clear and render messages
+      $messages.innerHTML = "";
+      if ($welcomeCard) {
+        $messages.appendChild($welcomeCard);
+        $welcomeCard.style.display = "none";
+      }
+      if (data.messages && data.messages.length > 0) {
+        data.messages.forEach(m => appendMessage(m.role, m.content));
+      }
+
+      // Update debug panel
+      $turnCount.textContent = data.turn_count || 0;
+      if (data.entities && Object.keys(data.entities).length) {
+        $entityList.innerHTML = Object.entries(data.entities)
+          .map(([k, v]) => `<div class="entity-row"><span class="entity-key">${esc(k)}</span><span class="entity-val">${esc(v)}</span></div>`)
+          .join("");
+      } else {
+        $entityList.innerHTML = `<p class="empty-state">No entities detected yet</p>`;
+      }
+      if (data.emotion_state) {
+        $emotionLabel.textContent = data.emotion_state;
+        $emotionBar.style.width = (data.emotion_confidence || 0) + "%";
+        $emotionConf.textContent = (data.emotion_confidence || 0) + "%";
+      }
+      if (data.preferences && data.preferences.length) {
+        $prefDisplay.textContent = data.preferences.join(", ");
+      } else {
+        $prefDisplay.textContent = "—";
+      }
+
+      scrollToBottom();
+      refreshHistory(); // update active highlight
+    } catch (err) {
+      console.error("Failed to load session:", err);
+    }
+  }
+
+  async function deleteSession(sid) {
+    try {
+      await fetch(`/api/sessions/${sid}`, { method: "DELETE" });
+      // If deleting current session, start fresh
+      if (sid === sessionId) {
+        sessionId = null;
+        localStorage.removeItem("mb_session_id");
+        clearChat();
+      }
+      refreshHistory();
+    } catch (_) { /* ignore */ }
+  }
+
+  function formatTimeAgo(timestamp) {
+    const diff = (Date.now() / 1000) - timestamp;
+    if (diff < 60) return "just now";
+    if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+    if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+    return Math.floor(diff / 86400) + "d ago";
   }
 
   // ─── DOM helpers ───────────────────────────────────────────────────────────
@@ -441,6 +638,7 @@
           $input.disabled = false;
           $input.placeholder = "Type your message…";
           updateSendButton();
+          refreshHistory();
           return; // stop polling
         }
       }

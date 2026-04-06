@@ -90,12 +90,42 @@ def get(session_id: str) -> Session | None:
     return _sessions.get(session_id)
 
 
+def list_sessions() -> List[dict]:
+    """Return a summary of all sessions, sorted by most recent first."""
+    results = []
+    for s in sorted(_sessions.values(), key=lambda s: s.last_active, reverse=True):
+        # Derive title from first user message
+        title = "New Conversation"
+        for msg in s.messages:
+            if msg["role"] == "user":
+                title = msg["content"][:50]
+                if len(msg["content"]) > 50:
+                    title += "…"
+                break
+        turn_count = len(s.messages) // 2
+        if turn_count == 0:
+            continue  # skip empty sessions
+        results.append({
+            "session_id": s.session_id,
+            "title": title,
+            "turn_count": turn_count,
+            "emotion": s.emotion_state,
+            "last_active": s.last_active,
+        })
+    return results
+
+
 def reset(session_id: str, system_prompt: str) -> Session:
     """Wipe a session and start fresh."""
     s = Session(session_id=session_id)
     s.llm_history = [{"role": "system", "content": system_prompt}]
     _sessions[session_id] = s
     return s
+
+
+def delete(session_id: str):
+    """Remove a session entirely."""
+    _sessions.pop(session_id, None)
 
 
 # ─── Entity extraction ───────────────────────────────────────────────────────
