@@ -8,7 +8,6 @@
 
   // ─── DOM refs ──────────────────────────────────────────────────────────────
   const $messages      = document.getElementById("chat-messages");
-  const $welcomeCard   = document.getElementById("welcome-card");
   const $form          = document.getElementById("chat-form");
   const $input         = document.getElementById("chat-input");
   const $btnSend       = document.getElementById("btn-send");
@@ -136,8 +135,8 @@
     isStreaming = true;
     updateSendButton();
 
-    // Hide welcome
-    if ($welcomeCard) $welcomeCard.style.display = "none";
+    // obliterate welcome cards
+    document.querySelectorAll('.welcome-card').forEach(el => el.remove());
 
     // Add user bubble
     appendMessage("user", text);
@@ -187,6 +186,7 @@
       const tokenCount = thinkingText.split(/\s+/).filter(Boolean).length;
       summary.innerHTML = `Thought for ${tokenCount} tokens <span class="msg-thinking-badge">${tokenCount} tokens</span>`;
       inlineThinkEl.open = false; // collapse after thinking is done
+      inlineThinkEl.removeAttribute("open"); // ensure it's removed for outerHTML
     }
 
     // Start SSE
@@ -301,8 +301,19 @@
         }
       }
 
-      // If no content arrived at all, show fallback
-      if (!contentSoFar.trim()) {
+      // Finish any pending thinking block if the stream ends without content tokens
+      if (inlineThinkEl && !thinkingFinalized) {
+        finalizeInlineThink();
+        thinkingFinalized = true;
+
+        // Ensure the finalized state is written to the DOM
+        if (!contentSoFar.trim()) {
+            bodyEl.innerHTML = inlineThinkEl.outerHTML;
+        }
+      }
+
+      // If no content or thinking arrived at all, show fallback
+      if (!contentSoFar.trim() && !thinkingText.trim()) {
         bodyEl.textContent = "I'm here for you. Could you tell me more about what you're feeling?";
       }
       bodyEl.classList.remove("streaming-cursor");
@@ -387,10 +398,6 @@
 
       // Clear and render messages
       $messages.innerHTML = "";
-      if ($welcomeCard) {
-        $messages.appendChild($welcomeCard);
-        $welcomeCard.style.display = "none";
-      }
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(m => appendMessage(m.role, m.content));
       }
@@ -660,8 +667,8 @@
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data || !data.messages || data.messages.length === 0) return;
-        // Hide welcome, render history
-        if ($welcomeCard) $welcomeCard.style.display = "none";
+        // Remove welcome, render history
+        document.querySelectorAll('.welcome-card').forEach(el => el.remove());
         data.messages.forEach(m => appendMessage(m.role, m.content));
         // Update debug
         $turnCount.textContent = data.turn_count || 0;
