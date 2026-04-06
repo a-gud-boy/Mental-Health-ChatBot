@@ -156,9 +156,11 @@
     let thinkingText = "";
     let removedTyping = false;
     let thinkingFinalized = false;
+    let thinkingStartTime = null;
 
     function ensureInlineThink() {
       if (inlineThinkEl || !reasoningVisible) return;
+      thinkingStartTime = Date.now();
       // Remove typing indicator to make room
       if (!removedTyping) {
         bodyEl.innerHTML = "";
@@ -184,7 +186,14 @@
       inlineThinkEl.classList.remove("is-streaming");
       const summary = inlineThinkEl.querySelector("summary");
       const tokenCount = thinkingText.split(/\s+/).filter(Boolean).length;
-      summary.innerHTML = `Thought for ${tokenCount} tokens <span class="msg-thinking-badge">${tokenCount} tokens</span>`;
+      
+      let durationStr = "a few seconds";
+      if (thinkingStartTime) {
+        const durationSec = Math.round((Date.now() - thinkingStartTime) / 1000);
+        durationStr = durationSec < 1 ? "< 1 second" : `${durationSec} second${durationSec !== 1 ? 's' : ''}`;
+      }
+      
+      summary.innerHTML = `Thought for ${durationStr} <span class="msg-thinking-badge">${tokenCount} tokens</span>`;
       inlineThinkEl.open = false; // collapse after thinking is done
       inlineThinkEl.removeAttribute("open"); // ensure it's removed for outerHTML
     }
