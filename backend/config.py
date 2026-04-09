@@ -23,6 +23,7 @@ CHROMA_COLLECTION = "mental_health_rag"
 
 # ─── RAG ──────────────────────────────────────────────────────────────────────
 RAG_TOP_K = 2  # number of documents to retrieve
+RAG_MAX_DISTANCE = 1.2  # Max L2 distance for contextual inclusion
 
 # ─── Knowledge base source ────────────────────────────────────────────────────
 KB_JSON_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "legacy", "mental_health_kb.json")

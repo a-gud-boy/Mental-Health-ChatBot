@@ -112,7 +112,10 @@ def chat(req: ChatRequest):
                     "snippet": r["document"][:200] + "…"} for r in rag_results]
 
     # 5. Augmented prompt
-    augmented = f"RETRIEVED CONTEXT:\n{rag_text}\n\nUSER MESSAGE:\n{user_msg}"
+    if rag_text:
+        augmented = f"RETRIEVED CONTEXT:\n{rag_text}\n\nUSER MESSAGE:\n{user_msg}"
+    else:
+        augmented = user_msg
     memory.add_user_turn(session, user_msg, augmented)
 
     # Inject safety addendum if high-risk

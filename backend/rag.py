@@ -17,6 +17,7 @@ from backend.config import (
     EMBEDDING_MODEL,
     KB_JSON_PATH,
     RAG_TOP_K,
+    RAG_MAX_DISTANCE,
 )
 
 # ─── Singletons (loaded once) ────────────────────────────────────────────────
@@ -67,6 +68,8 @@ def query(text: str, n: int = RAG_TOP_K) -> List[dict]:
         for i, doc in enumerate(results["documents"][0]):
             meta = results["metadatas"][0][i] if results["metadatas"] else {}
             dist = results["distances"][0][i] if results["distances"] else 0.0
+            if dist > RAG_MAX_DISTANCE:
+                continue
             docs.append({
                 "document": doc,
                 "source": meta.get("source", "unknown"),

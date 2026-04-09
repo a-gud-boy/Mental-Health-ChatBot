@@ -17,15 +17,14 @@ echo "  Make sure LM Studio is running on localhost:1234"
 echo ""
 echo "══════════════════════════════════════════════════════════════"
 
-# The venv lives on a native Linux FS because the project drive (NTFS) can't create symlinks.
-# If you move this project, recreate the venv:
-#   python3 -m venv /tmp/mindbridge_venv
-#   /tmp/mindbridge_venv/bin/pip install -r requirements.txt
+# The venv is set to use the rag_env from conda.
+# If dependencies are missing, install them:
+#   /home/bruno/miniconda3/envs/rag_env/bin/pip install -r requirements.txt
 
-VENV="/tmp/mindbridge_venv"
+VENV="/home/bruno/miniconda3/envs/rag_env"
 if [ ! -f "$VENV/bin/python" ]; then
-  echo "[!] Virtual environment not found at $VENV"
-  echo "    Create it:  python3 -m venv $VENV && $VENV/bin/pip install -r requirements.txt"
+  echo "[!] Conda environment not found at $VENV"
+  echo "    Please create it using: conda create -n rag_env python=3.10 (or whatever version)"
   exit 1
 fi
 
